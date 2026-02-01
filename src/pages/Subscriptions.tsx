@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { CreditCard, Calendar, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import api from '@/lib/api';
 
 const Subscriptions = () => {
     const { t } = useTranslation();
@@ -13,12 +15,22 @@ const Subscriptions = () => {
         { name: "Amex Platinum", limit: 800000, used: 120000, cycle: "1st - 30th", due: "20th Feb" }
     ];
 
-    const subscriptions = [
-        { name: "Netflix Premium", amount: 649, renewal: "Feb 15", card: "HDFC Regalia" },
-        { name: "Spotify Duo", amount: 169, renewal: "Feb 10", card: "HDFC Regalia" },
-        { name: "Adobe Creative Cloud", amount: 4230, renewal: "Feb 28", card: "Amex Platinum" },
-        { name: "Amazon Prime", amount: 1499, renewal: "Mar 01", card: "HDFC Regalia" }
-    ];
+    const [subscriptions, setSubscriptions] = useState<any[]>([]);
+
+    useEffect(() => {
+        api.get('/dashboard/subscriptions').then(res => {
+            const subs = res.data.subscriptions || [];
+            // Map backend to UI
+            const mapped = subs.map((sub: any) => ({
+                id: sub.id,
+                name: sub.name,
+                amount: sub.cost,
+                renewal: new Date(sub.nextRenewal).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                card: "Linked Card" // Backend doesn't store card info yet
+            }));
+            setSubscriptions(mapped);
+        }).catch(err => console.error(err));
+    }, []);
 
     return (
         <div className="space-y-6">

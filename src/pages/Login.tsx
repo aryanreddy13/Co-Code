@@ -20,8 +20,9 @@ type LoginStep = 'login' | 'name-input' | 'buffering' | 'bank-selection';
 const Login = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { setIsAuthenticated, hasCompletedOnboarding, completeOnboarding, updateSelectedBanks, setName } = useUser();
+  const { setIsAuthenticated, hasCompletedOnboarding, completeOnboarding, updateSelectedBanks, setName, login, register } = useUser();
   const [isLogin, setIsLogin] = useState(true);
+
   const [isLoaded, setIsLoaded] = useState(false);
 
   // New Step-based state management
@@ -31,16 +32,27 @@ const Login = () => {
     setIsLoaded(true);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLogin) {
-      // Login -> Buffer
-      setStep('buffering');
-    } else {
-      // Signup -> Name Input
-      setStep('name-input');
+    const form = e.target as HTMLFormElement;
+    const email = (form.elements.namedItem('email') as HTMLInputElement).value;
+    const password = (form.elements.namedItem('password') as HTMLInputElement).value;
+
+    try {
+      if (isLogin) {
+        await login(email, password);
+        // Login -> Buffer
+        setStep('buffering');
+      } else {
+        await register(email, password);
+        // Signup -> Name Input
+        setStep('name-input');
+      }
+    } catch (err) {
+      alert("Authentication failed. Please try again.");
     }
   };
+
 
   const handleNameSubmit = (name: string) => {
     setName(name);

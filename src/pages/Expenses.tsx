@@ -30,6 +30,35 @@ const Expenses = () => {
     const expenses = transactions.filter(t => t.type === 'expense' || t.type === 'bill')
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+    // Calculate dynamic stats
+    const totalExpensesSum = expenses.reduce((acc, curr) => acc + curr.amount, 0);
+    const categoryTotals: Record<string, number> = {};
+    expenses.forEach(t => {
+        const cat = t.category;
+        categoryTotals[cat] = (categoryTotals[cat] || 0) + t.amount;
+    });
+
+    // Highest Category
+    const highestCategoryKey = Object.keys(categoryTotals).reduce((a, b) => categoryTotals[a] > categoryTotals[b] ? a : b, '');
+    const highestCategoryAmount = categoryTotals[highestCategoryKey] || 0;
+    const highestCategoryLabel = highestCategoryKey ? (t.expenses.categories[highestCategoryKey as keyof typeof t.expenses.categories] || highestCategoryKey) : 'None';
+
+    // Top Categories
+    const topCategories = Object.entries(categoryTotals)
+        .map(([cat, val]) => ({
+            label: t.expenses.categories[cat as keyof typeof t.expenses.categories] || cat,
+            amount: `₹${val.toLocaleString()}`,
+            percent: totalExpensesSum ? Math.round((val / totalExpensesSum) * 100) : 0,
+            rawAmount: val
+        }))
+        .sort((a, b) => b.rawAmount - a.rawAmount)
+        .slice(0, 3)
+        .map((item, i) => ({
+            ...item,
+            color: ['bg-primary', 'bg-blue-500', 'bg-orange-500'][i] || 'bg-gray-500'
+        }));
+
+
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isAddBillOpen, setIsAddBillOpen] = useState(false);
     const [newExpense, setNewExpense] = useState<Partial<Expense>>({});
@@ -204,9 +233,9 @@ const Expenses = () => {
                         <div className="flex items-center justify-between mt-1">
                             <div className="flex items-center gap-2">
                                 <ShoppingBag className="h-4 w-4 text-orange-500" />
-                                <span className="font-bold">Shopping</span>
+                                <span className="font-bold capitalize">{highestCategoryLabel}</span>
                             </div>
-                            <span className="text-sm font-bold">₹1,200</span>
+                            <span className="text-sm font-bold">₹{highestCategoryAmount.toLocaleString()}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -214,7 +243,7 @@ const Expenses = () => {
                     <CardContent className="p-4">
                         <p className="text-xs text-muted-foreground font-medium">Total Transactions</p>
                         <div className="flex items-center justify-between mt-1">
-                            <span className="text-2xl font-bold">42</span>
+                            <span className="text-2xl font-bold">{expenses.length}</span>
                             <Badge variant="secondary" className="text-[10px] text-green-600 bg-green-50">
                                 <ArrowUpRight className="h-3 w-3 mr-1" /> +12%
                             </Badge>
@@ -225,7 +254,7 @@ const Expenses = () => {
                     <CardContent className="p-4">
                         <p className="text-xs text-muted-foreground font-medium">Daily Average</p>
                         <div className="flex items-center justify-between mt-1">
-                            <span className="text-2xl font-bold">₹850</span>
+                            <span className="text-2xl font-bold">₹{(totalExpensesSum / 30).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                             <Badge variant="secondary" className="text-[10px] text-red-600 bg-red-50">
                                 <ArrowDownRight className="h-3 w-3 mr-1" /> -5%
                             </Badge>
@@ -240,11 +269,7 @@ const Expenses = () => {
                     <CardTitle className="text-sm font-medium">Where your money goes</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 space-y-4">
-                    {[
-                        { label: 'Bills & Utilities', amount: '₹12,400', percent: 45, color: 'bg-primary' },
-                        { label: 'Food & Dining', amount: '₹8,200', percent: 30, color: 'bg-blue-500' },
-                        { label: 'Shopping', amount: '₹4,500', percent: 15, color: 'bg-orange-500' },
-                    ].map((item, i) => (
+                    {topCategories.map((item, i) => (
                         <div key={i} className="space-y-1">
                             <div className="flex justify-between text-xs">
                                 <span className="font-medium">{item.label}</span>

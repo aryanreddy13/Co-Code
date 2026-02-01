@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import api from '@/lib/api';
+
 
 export type TransactionType = 'income' | 'expense' | 'bill';
 
@@ -22,23 +24,59 @@ interface TransactionContextType {
 const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
 
 export const TransactionProvider = ({ children }: { children: ReactNode }) => {
-    const [transactions, setTransactions] = useState<Transaction[]>([
-        { id: 1, date: "2024-01-28", category: "food", amount: 450, note: "Dinner with friends", type: 'expense' },
-        { id: 2, date: "2024-01-29", category: "transport", amount: 200, note: "Uber to work", type: 'expense' },
-        { id: 3, date: "2024-01-30", category: "shopping", amount: 1200, note: "New shirt", type: 'expense' },
-        { id: 4, date: "2024-02-01", category: "bills", amount: 2500, note: "Electricity Bill", type: 'expense' }, // mapped to expense for simplicity in trends, or handle as bill
-        { id: 5, date: "2024-02-02", category: "salary", amount: 85000, note: "Monthly Salary", type: 'income' },
-        { id: 6, date: "2024-02-05", category: "entertainment", amount: 800, note: "Movie Night", type: 'expense' },
-        { id: 7, date: "2024-02-10", category: "freelance", amount: 12000, note: "Project X", type: 'income' },
-    ]);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-    const addTransaction = (transaction: Omit<Transaction, 'id'>) => {
-        const newTransaction = {
-            ...transaction,
-            id: Date.now(),
+    useEffect(() => {
+        const fetchTransactions = async () => {
+            try {
+                const response = await api.get('/dashboard/expenses');
+                const backendExpenses = response.data.expenses || [];
+
+                // Map backend data to frontend model
+                const mappedTransactions: Transaction[] = backendExpenses.map((t: any, index: number) => ({
+                    id: t.id || index + Date.now(), // Fallback ID
+                    date: t.date,
+                    category: t.category,
+                    amount: t.amount,
+                    note: t.description || "",
+                    type: t.type || 'expense', // Default to expense if missing
+                    attachment: false
+                }));
+                // Sort by date desc
+                mappedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                setTransactions(mappedTransactions);
+            } catch (error) {
+                console.error("Failed to fetch transactions", error);
+            }
         };
-        setTransactions((prev) => [newTransaction, ...prev]);
+
+        fetchTransactions();
+    }, []);
+
+
+    const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
+        try {
+            // Optimistic update
+            const tempId = Date.now();
+            const newTransaction = { ...transaction, id: tempId };
+            setTransactions((prev) => [newTransaction, ...prev]);
+
+            // API Call
+            await api.post('/expenses', {
+                date: transaction.date,
+                category: transaction.category,
+                amount: transaction.amount,
+                description: transaction.note,
+                type: transaction.type
+            });
+
+            // Re-fetch or stick with optimistic? Stick with op for now, or update ID if we got one.
+        } catch (error) {
+            console.error("Failed to add transaction", error);
+            // Rollback if needed
+        }
     };
+
 
     const getTransactionsByType = (type: TransactionType) => {
         return transactions.filter(t => t.type === type);

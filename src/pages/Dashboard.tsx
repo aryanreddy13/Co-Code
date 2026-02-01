@@ -8,13 +8,33 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input'; // Added Input
 import { useUser } from '@/contexts/UserContext';
 import { useTransactions } from '@/contexts/TransactionContext'; // Import context
-import { Link } from 'react-router-dom'; // Import Link
+import { Link } from 'react-router-dom';
+import api from '@/lib/api';
+import { useEffect } from 'react';
 
 const Dashboard = () => {
   const { t } = useTranslation();
   const { name } = useUser();
   const { transactions } = useTransactions(); // Use context
   const [isChatOpen, setIsChatOpen] = useState(false); // Chat state
+  const [summary, setSummary] = useState<any>(null);
+  const [goals, setGoals] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [sumRes, goalsRes] = await Promise.all([
+          api.get('/dashboard/summary'),
+          api.get('/dashboard/goals')
+        ]);
+        setSummary(sumRes.data);
+        setGoals(goalsRes.data.goals || []);
+      } catch (err) {
+        console.error("Failed to fetch dashboard data", err);
+      }
+    };
+    fetchDashboardData();
+  }, []);
 
   // diverse calculations
   const totalExpenses = transactions
@@ -25,8 +45,8 @@ const Dashboard = () => {
     .filter(t => t.type === 'income')
     .reduce((acc, curr) => acc + curr.amount, 0);
 
-  // Simple hardcoded investments for now as no investments context yet (task focused on expenses/trends)
-  const totalInvestments = 12400;
+  // Simple hardcoded investments replaced with real data
+  const totalInvestments = summary?.total_investment || 0;
 
   return (
     <div className="space-y-6 relative">
@@ -164,32 +184,24 @@ const Dashboard = () => {
               <CardTitle className="text-sm font-medium">Active Goals</CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-5">
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="font-medium">Goa Trip</span>
-                  <span className="text-muted-foreground">₹12k / ₹30k</span>
-                </div>
-                <Progress value={40} className="h-2 dark:bg-muted/30 [&>div]:dark:bg-primary" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="font-medium">New MacBook</span>
-                  <span className="text-muted-foreground">₹85k / ₹1.2L</span>
-                </div>
-                <Progress value={70} className="h-2 dark:bg-muted/30 [&>div]:dark:bg-blue-500" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="font-medium">Emergency Fund</span>
-                  <span className="text-muted-foreground">₹20k / ₹1L</span>
-                </div>
-                <Progress value={20} className="h-2 dark:bg-muted/30 [&>div]:dark:bg-orange-500" />
-              </div>
+              {goals.length > 0 ? (
+                goals.slice(0, 3).map((goal: any) => (
+                  <div key={goal.id} className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-medium">{goal.name}</span>
+                      <span className="text-muted-foreground">₹{(goal.saved || 0) >= 1000 ? `${(goal.saved / 1000).toFixed(0)}k` : goal.saved} / ₹{(goal.target || 0) >= 1000 ? `${(goal.target / 1000).toFixed(0)}k` : goal.target}</span>
+                    </div>
+                    <Progress value={(goal.saved / goal.target) * 100} className={`h-2 dark:bg-muted/30 [&>div]:dark:${goal.icon === '🛡️' ? 'bg-orange-500' : goal.icon === '✈️' ? 'bg-primary' : 'bg-blue-500'}`} />
+                  </div>
+                ))
+              ) : (
+                <div className="text-xs text-muted-foreground">No active goals. Add one!</div>
+              )}
 
               <div className="pt-2 border-t mt-4">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>Total Saved</span>
-                  <span className="font-bold text-foreground">₹1.17L</span>
+                  <span className="font-bold text-foreground">₹{goals.reduce((acc, g) => acc + (g.saved || 0), 0).toLocaleString()}</span>
                 </div>
               </div>
             </CardContent>

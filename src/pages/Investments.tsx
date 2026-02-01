@@ -1,9 +1,24 @@
 import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign } from "lucide-react";
+import { useState, useEffect } from "react";
+import api from "@/lib/api";
 
 const Investments = () => {
     const { t } = useTranslation();
+    const [investments, setInvestments] = useState<any[]>([]);
+
+    useEffect(() => {
+        api.get('/dashboard/investments').then(res => {
+            setInvestments(res.data.investments || []);
+        }).catch(console.error);
+    }, []);
+
+    const totalPortfolio = investments.reduce((sum, inv) => sum + (inv.amount || 0), 0);
+    // Simple gain calculation based on annual return (assuming held for 1 year for demo or derived)
+    const totalGains = investments.reduce((sum, inv) => sum + ((inv.amount || 0) * ((inv.annual_return || 0) / 100)), 0);
+    const returnRate = totalPortfolio ? (totalGains / totalPortfolio) * 100 : 0;
+
 
     return (
         <div className="space-y-6">
@@ -19,7 +34,7 @@ const Investments = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center justify-between">
-                            <div className="text-2xl font-bold">₹2,45,000</div>
+                            <div className="text-2xl font-bold">₹{totalPortfolio.toLocaleString()}</div>
                             <DollarSign className="h-5 w-5 text-muted-foreground" />
                         </div>
                     </CardContent>
@@ -31,7 +46,7 @@ const Investments = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center justify-between">
-                            <div className="text-2xl font-bold text-green-600">+₹45,000</div>
+                            <div className="text-2xl font-bold text-green-600">+₹{totalGains.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                             <TrendingUp className="h-5 w-5 text-green-600" />
                         </div>
                     </CardContent>
@@ -43,7 +58,7 @@ const Investments = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center justify-between">
-                            <div className="text-2xl font-bold text-green-600">+22.5%</div>
+                            <div className="text-2xl font-bold text-green-600">+{returnRate.toFixed(1)}%</div>
                             <TrendingUp className="h-5 w-5 text-green-600" />
                         </div>
                     </CardContent>
@@ -56,26 +71,19 @@ const Investments = () => {
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 border rounded-lg">
-                            <div>
-                                <p className="font-semibold">RELIANCE</p>
-                                <p className="text-sm text-muted-foreground">50 shares</p>
+                        {investments.map((inv, i) => (
+                            <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
+                                <div>
+                                    <p className="font-semibold">{inv.type || "Investment"}</p>
+                                    <p className="text-sm text-muted-foreground">Rate: {inv.annual_return}%</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="font-semibold">₹{inv.amount.toLocaleString()}</p>
+                                    <p className="text-sm text-green-600">+{inv.annual_return}%</p>
+                                </div>
                             </div>
-                            <div className="text-right">
-                                <p className="font-semibold">₹1,25,000</p>
-                                <p className="text-sm text-green-600">+12.5%</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-between p-4 border rounded-lg">
-                            <div>
-                                <p className="font-semibold">TCS</p>
-                                <p className="text-sm text-muted-foreground">30 shares</p>
-                            </div>
-                            <div className="text-right">
-                                <p className="font-semibold">₹1,20,000</p>
-                                <p className="text-sm text-green-600">+18.2%</p>
-                            </div>
-                        </div>
+                        ))}
+                        {investments.length === 0 && <p className="text-muted-foreground text-sm">No investments found.</p>}
                     </div>
                 </CardContent>
             </Card>

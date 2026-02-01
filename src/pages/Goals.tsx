@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
+import api from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Plane, Smartphone, ShieldCheck, Target, Trophy, Info, Plus, Calendar as CalendarIcon, AlertCircle } from 'lucide-react';
@@ -36,49 +37,56 @@ const Goals = () => {
         error?: string;
     } | null>(null);
 
-    // Initial Mock Data can't easily use t() inside useState initializer if we want it to update on lang change
-    // simpler to just store status codes and render labels dynamically
-    const [goals, setGoals] = useState([
-        {
-            id: 1,
-            name: "Emergency Fund",
-            target: 100000,
-            current: 45000,
-            monthly: 5000,
-            icon: ShieldCheck,
-            status: "on-track",
-            color: "text-green-500",
-            barColor: "bg-green-500",
-            daysLeft: 120,
-            targetDate: "30/05/2026"
-        },
-        {
-            id: 2,
-            name: "Trip to Goa",
-            target: 30000,
-            current: 12000,
-            monthly: 2000,
-            icon: Plane,
-            status: "behind",
-            color: "text-orange-500",
-            barColor: "bg-orange-500",
-            daysLeft: 45,
-            targetDate: "15/03/2026"
-        },
-        {
-            id: 3,
-            name: "New iPhone",
-            target: 80000,
-            current: 25000,
-            monthly: 3500,
-            icon: Smartphone,
-            status: "at-risk",
-            color: "text-red-500",
-            barColor: "bg-red-500",
-            daysLeft: 60,
-            targetDate: "01/04/2026"
+    // Initial State - Fetch from API
+    const [goals, setGoals] = useState<any[]>([]);
+
+    useEffect(() => {
+        fetchGoals();
+    }, []);
+
+    const fetchGoals = async () => {
+        try {
+            const res = await api.get('/dashboard/goals');
+            // Backend returns list of goals. We need to map icon string to component if needed, 
+            // but for now, let's just store the data and handle icon in render.
+            // Also need to calculate status/daysLeft if backend doesn't provide it fully updated.
+            // Backend GoalItem: { name, target, saved, deadline, icon, id }
+            // Frontend Goal Expects: { id, name, target, current, monthly, icon: Component, status, color, daysLeft, targetDate }
+
+            const loadedGoals = (res.data.goals || []).map((g: any) => {
+                // Calculate derived fields
+                const targetDate = new Date(g.deadline); // assuming YYYY-MM-DD or similar
+                const today = new Date();
+                const daysLeft = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+                const months = Math.max(daysLeft / 30, 1);
+                const remaining = Math.max(g.target - g.saved, 0);
+                const monthly = Math.ceil(remaining / months);
+                const perc = g.target ? (g.saved / g.target) * 100 : 0;
+
+                let status = 'on-track';
+                let color = 'text-green-500';
+                // Simple status logic
+                if (perc < 50 && daysLeft < 30) { status = 'at-risk'; color = 'text-red-500'; }
+                else if (perc < 80 && daysLeft < 60) { status = 'behind'; color = 'text-orange-500'; }
+
+                return {
+                    id: g.id,
+                    name: g.name,
+                    target: g.target,
+                    current: g.saved,
+                    monthly: monthly, // derived
+                    iconStr: g.icon || "Target", // store string
+                    status: status,
+                    color: color,
+                    daysLeft: daysLeft,
+                    targetDate: g.deadline // string
+                };
+            });
+            setGoals(loadedGoals);
+        } catch (e) {
+            console.error("Failed to fetch goals", e);
         }
-    ]);
+    };
 
     const getStatusLabel = (status: string) => {
         if (status === 'on-track') return t.goals.onTrack;
@@ -145,27 +153,34 @@ const Goals = () => {
         });
     };
 
-    const createGoal = () => {
+    const createGoal = async () => {
         if (!calculations?.isValid || !formData.name) return;
 
-        const newGoal = {
-            id: Date.now(),
-            name: formData.name,
-            target: parseFloat(formData.targetAmount),
-            current: parseFloat(formData.currentSaved) || 0,
-            monthly: calculations.monthlyRequired,
-            icon: Target, // Default icon
-            status: "on-track",
-            color: "text-blue-500", // Default color
-            barColor: "bg-blue-500",
-            daysLeft: calculations.daysLeft,
-            targetDate: formData.date
-        };
+        try {
+            // Transform date 20/05/2026 to YYYY-MM-DD for backend consistency if needed
+            // But let's stick to what data loader expects (string). 
+            // Note: Data loader might expect YYYY-MM-DD for sorting? 
+            // Let's convert to YYYY-MM-DD
+            const [day, month, year] = formData.date.split('/');
+            const isoDate = `${year}-${month}-${day}`;
 
-        setGoals([...goals, newGoal]);
-        setIsDialogOpen(false);
-        setFormData({ name: '', targetAmount: '', currentSaved: '', date: '' });
-        setCalculations(null);
+            const payload = {
+                name: formData.name,
+                target: parseFloat(formData.targetAmount),
+                saved: parseFloat(formData.currentSaved) || 0,
+                deadline: isoDate,
+                icon: "Target"
+            };
+
+            await api.post('/goals', payload);
+            await fetchGoals(); // Refresh list
+
+            setIsDialogOpen(false);
+            setFormData({ name: '', targetAmount: '', currentSaved: '', date: '' });
+            setCalculations(null);
+        } catch (e) {
+            console.error("Failed to create goal", e);
+        }
     };
 
     return (
@@ -200,7 +215,11 @@ const Goals = () => {
                                     {goal.name}
                                 </CardTitle>
                                 <div className={cn("p-2 rounded-lg bg-muted/50 group-hover:bg-primary/10 transition-colors", goal.color)}>
-                                    <goal.icon className="h-5 w-5" />
+                                    {/* Icon Mapping */}
+                                    {goal.iconStr === 'Plane' ? <Plane className="h-5 w-5" /> :
+                                        goal.iconStr === 'Smartphone' ? <Smartphone className="h-5 w-5" /> :
+                                            goal.iconStr === 'ShieldCheck' ? <ShieldCheck className="h-5 w-5" /> :
+                                                <Target className="h-5 w-5" />}
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-4">

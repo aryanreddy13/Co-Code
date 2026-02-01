@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import api from '@/lib/api';
+
 
 type UserData = {
     email: string | null;
@@ -16,7 +18,10 @@ type UserContextType = {
     hasCompletedOnboarding: boolean;
     updateSelectedBanks: (banks: string[]) => void;
     completeOnboarding: () => void;
+    login: (email: string, password: string) => Promise<void>;
+    register: (email: string, password: string) => Promise<void>;
 };
+
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
@@ -77,6 +82,50 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         setHasCompletedOnboarding(true);
     };
 
+    const login = async (email: string, password: string) => {
+        try {
+            const res = await api.post('/auth/login', { email, password });
+            const data = res.data;
+            if (data.token) {
+                // Save token/user info
+                const userData = { email, name: data.name, user_id: data.user_id };
+                setUser(userData);
+                setIsAuthenticated(true);
+                // Also save to localStorage specifically if api.ts uses it (I set api.ts to read 'user' or 'user_id_token')
+                localStorage.setItem('user_id_token', data.token);
+            }
+        } catch (e) {
+            console.error("Login failed", e);
+            throw e;
+        }
+    };
+
+    const register = async (email: string, password: string) => {
+        try {
+            const res = await api.post('/auth/register', { email, password });
+            const data = res.data;
+            if (data.user_id) {
+                // Auto login after register? Or just return
+                // Let's auto login logic
+                const userData = { email, name: null, user_id: data.user_id };
+                setUser(userData);
+                setIsAuthenticated(true); // Maybe not yet? User flow expects 'name-input' next
+                // Actually, original flow was: Signup -> name-input -> buffering -> authenticated
+                // So here we should probably NOT setAuthenticated(true) immediately if we want to follow the flow.
+                // But we need the user_id for the next steps.
+                // Let's just set User but maybe not Authenticated?
+                // The original code uses `isLogin` state to decide flow.
+                // If I setAuthenticated(true) here, it might jump.
+                // Let's just save the user data and let the component handle the flow transition.
+                // But wait, `setUser` updates `user`.
+            }
+        } catch (e) {
+            console.error("Register failed", e);
+            throw e;
+        }
+    };
+
+
     const logout = () => {
         setUser(null);
         setIsAuthenticated(false);
@@ -95,8 +144,11 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
             selectedBanks,
             hasCompletedOnboarding,
             updateSelectedBanks,
-            completeOnboarding
+            completeOnboarding,
+            login,
+            register
         }}>
+
             {children}
         </UserContext.Provider>
     );

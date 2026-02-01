@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import api from '@/lib/api';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
 
@@ -7,15 +8,31 @@ export const SpendingTrendsChart = () => {
     const [showExpense, setShowExpense] = useState(true);
     const [showIncome, setShowIncome] = useState(false);
 
-    // Mock data for Last 6 Months (Meaningful Trend)
-    const data = [
-        { name: 'Jan', inc: 4500, exp: 3200 },
-        { name: 'Feb', inc: 4800, exp: 3100 },
-        { name: 'Mar', inc: 5100, exp: 4600 },
-        { name: 'Apr', inc: 4900, exp: 3900 },
-        { name: 'May', inc: 5300, exp: 4100 },
-        { name: 'Jun', inc: 5800, exp: 3800 },
-    ];
+    // Fetched data state
+    const [data, setData] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchHistory = async () => {
+            try {
+                const res = await api.get('/dashboard/history');
+                const history = res.data.history || [];
+                // Map backend format (month, income, expense) to chart format (name, inc, exp)
+                const mappedData = history.map((item: any) => ({
+                    name: item.month,
+                    inc: item.income,
+                    exp: item.expense
+                }));
+                setData(mappedData);
+            } catch (err) {
+                console.error("Failed to fetch spending trends", err);
+            }
+        };
+        fetchHistory();
+    }, []);
+
+    // Fallback if no data yet (don't show empty chart, maybe show loading or empty)
+    // For now, if data is empty, Recharts handles it, or we can leave it empty.
+
 
     return (
         <div className="w-full h-full flex flex-col">
